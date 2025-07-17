@@ -1,0 +1,208 @@
+// chess_game/src/com/example/chess/Board.java
+package com.example.chess;
+
+import com.example.chess.pieces.Bishop;
+import com.example.chess.pieces.King;
+import com.example.chess.pieces.Knight;
+import com.example.chess.pieces.Pawn;
+import com.example.chess.pieces.Piece;
+import com.example.chess.pieces.Queen;
+import com.example.chess.pieces.Rook;
+
+public class Board { // Alterado para public
+    Piece[][] grid = new Piece[8][8];
+
+    public Board() {
+        setup();
+    }
+
+    void setup() {
+        // Peças Pretas
+        grid[0][0] = new Rook(false, 0, 0);
+        grid[0][1] = new Knight(false, 0, 1);
+        grid[0][2] = new Bishop(false, 0, 2);
+        grid[0][3] = new Queen(false, 0, 3);
+        grid[0][4] = new King(false, 0, 4);
+        grid[0][5] = new Bishop(false, 0, 5);
+        grid[0][6] = new Knight(false, 0, 6);
+        grid[0][7] = new Rook(false, 0, 7);
+        for (int i = 0; i < 8; i++) {
+            grid[1][i] = new Pawn(false, 1, i);
+        }
+
+        // Peças Brancas
+        grid[7][0] = new Rook(true, 7, 0);
+        grid[7][1] = new Knight(true, 7, 1);
+        grid[7][2] = new Bishop(true, 7, 2);
+        grid[7][3] = new Queen(true, 7, 3);
+        grid[7][4] = new King(true, 7, 4);
+        grid[7][5] = new Bishop(true, 7, 5);
+        grid[7][6] = new Knight(true, 7, 6);
+        grid[7][7] = new Rook(true, 7, 7);
+        for (int i = 0; i < 8; i++) {
+            grid[6][i] = new Pawn(true, 6, i);
+        }
+    }
+
+    public void print() { // Alterado para public
+        System.out.println("  a b c d e f g h");
+        for (int i = 0; i < 8; i++) {
+            System.out.print(8 - i + " ");
+            for (int j = 0; j < 8; j++) {
+                if (grid[i][j] == null) {
+                    System.out.print(". ");
+                } else {
+                    System.out.print(grid[i][j] + " ");
+                }
+            }
+            System.out.println(8 - i);
+        }
+        System.out.println("  a b c d e f g h");
+        System.out.println();
+    }
+
+    public boolean movePiece(int fromRow, int fromCol, int toRow, int toCol, boolean whiteTurn) { // Alterado para public
+        if (!inBounds(fromRow, fromCol) || !inBounds(toRow, toCol)) {
+            return false;
+        }
+
+        Piece piece = grid[fromRow][fromCol];
+
+        if (piece == null) {
+            return false;
+        }
+
+        if (piece.isWhite != whiteTurn) {
+            System.out.println("Não é a vez da sua peça.");
+            return false;
+        }
+
+        boolean podeMover = piece.canMove(toRow, toCol, grid);
+
+        if (!podeMover) {
+            return false;
+        }
+
+        Piece capturedPiece = grid[toRow][toCol]; // Renomeado para clareza
+
+        // Make the move temporarily
+        grid[toRow][toCol] = piece;
+        grid[fromRow][fromCol] = null;
+
+        int oldRow = piece.row;    // Store old position of the piece
+        int oldCol = piece.col;
+
+        piece.setPosition(toRow, toCol); // Update piece's internal position
+
+        // Check if the move puts own king in check
+        if (isInCheck(whiteTurn)) {
+            System.out.println("Movimento inválido: coloca o rei em xeque.");
+            // Revert the move if it puts king in check
+            grid[fromRow][fromCol] = piece;
+            grid[toRow][toCol] = capturedPiece;
+            piece.setPosition(oldRow, oldCol); // Revert piece's internal position
+            return false;
+        }
+
+        // Handle pawn promotion (simple version for now)
+        if (piece instanceof Pawn) {
+            if (piece.isWhite && toRow == 0) {
+                grid[toRow][toCol] = new Queen(true, toRow, toCol);
+            } else if (!piece.isWhite && toRow == 7) {
+                grid[toRow][toCol] = new Queen(false, toRow, toCol);
+            }
+        }
+        
+        return true;
+    }
+
+    boolean inBounds(int row, int col) {
+        return row >= 0 && row < 8 && col >= 0 && col < 8;
+    }
+
+    public boolean isInCheck(boolean white) { // Alterado para public
+        int kingRow = -1;
+        int kingCol = -1;
+
+        // Find the king's position
+        for (int i = 0; i < 8; i++) {
+            for (int j = 0; j < 8; j++) {
+                Piece p = grid[i][j];
+                if (p instanceof King && p.isWhite == white) {
+                    kingRow = i;
+                    kingCol = j;
+                    break;
+                }
+            }
+            if (kingRow != -1) break; // King found
+        }
+        
+        if (kingRow == -1) { // Should not happen in a valid game, but for safety
+             return false; // King not found for some reason, cannot be in check
+        }
+
+        // Check if any opponent piece can attack the king
+        for (int i = 0; i < 8; i++) {
+            for (int j = 0; j < 8; j++) {
+                Piece p = grid[i][j];
+                if (p != null && p.isWhite != white) { // Opponent's piece
+                    // Temporarily set piece's position for canMove check
+                    int originalRow = p.row;
+                    int originalCol = p.col;
+                    p.setPosition(i, j); // Ensure piece knows its current grid position for canMove
+                    
+                    if (p.canMove(kingRow, kingCol, grid)) {
+                        p.setPosition(originalRow, originalCol); // Revert piece's position
+                        return true;
+                    }
+                    p.setPosition(originalRow, originalCol); // Revert piece's position
+                }
+            }
+        }
+        return false;
+    }
+
+    public boolean isCheckmate(boolean white) { // Alterado para public
+        if (!isInCheck(white)) {
+            return false; // Not checkmate if not even in check
+        }
+
+        // Try every possible move for the current player
+        for (int i = 0; i < 8; i++) {
+            for (int j = 0; j < 8; j++) {
+                Piece p = grid[i][j];
+
+                if (p != null && p.isWhite == white) { // Your piece
+                    for (int r = 0; r < 8; r++) {
+                        for (int c = 0; c < 8; c++) {
+                            // Check if the move is theoretically possible for the piece
+                            // (without considering self-check yet)
+                            if (p.canMove(r, c, grid)) { 
+                                // Temporarily make the move
+                                Piece capturedPiece = grid[r][c];
+                                int originalRow = p.row;
+                                int originalCol = p.col;
+
+                                grid[r][c] = p;
+                                grid[i][j] = null;
+                                p.setPosition(r, c);
+
+                                boolean stillInCheck = isInCheck(white);
+
+                                // Revert the move
+                                grid[i][j] = p;
+                                grid[r][c] = capturedPiece;
+                                p.setPosition(originalRow, originalCol);
+
+                                if (!stillInCheck) {
+                                    return false; // Found a move that gets out of check
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return true; // No move found that gets out of check
+    }
+}
